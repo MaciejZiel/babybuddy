@@ -82,6 +82,23 @@ class BabyBuddyFilterView(FilterView):
     # TODO Figure out the correct way to use this.
     strict = False
 
+    def get_queryset(self):
+        """
+        Loads the child and the tags of the listed entries with the page
+        instead of with one query per row.
+        """
+        queryset = super().get_queryset()
+        fields = {
+            field.name
+            for field in queryset.model._meta.get_fields()
+            if not field.auto_created
+        }
+        if "child" in fields:
+            queryset = queryset.select_related("child")
+        if "tags" in fields:
+            queryset = queryset.prefetch_related("tags")
+        return queryset
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         children = {o.child for o in context["object_list"] if hasattr(o, "child")}

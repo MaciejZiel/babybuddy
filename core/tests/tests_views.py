@@ -2,8 +2,10 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.core.management import call_command
+from django.db import connection
 from django.test import TestCase
 from django.test import Client as HttpClient
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from faker import Faker
@@ -403,3 +405,46 @@ class TimelinePermissionsTestCase(TestCase):
         content = page.content.decode()
         self.assertIn("Timeline Medication", content)
         self.assertIn("Timeline private note", content)
+
+
+class ListQueriesTestCase(TestCase):
+    """List pages load the child and the tags of their entries with the page."""
+
+    fixtures = ["tests.json"]
+    urls = ("/changes/", "/notes/", "/temperature/")
+
+    def setUp(self):
+        self.child = models.Child.objects.first()
+        user = get_user_model().objects.create_user(
+            username="list-queries", is_superuser=True
+        )
+        self.client.force_login(user)
+
+    def add_entries(self, count):
+        for _ in range(count):
+            change = models.DiaperChange.objects.create(
+                child=self.child, wet=True, solid=False
+            )
+            change.tags.add("list-queries")
+            note = models.Note.objects.create(child=self.child, note="Note")
+            note.tags.add("list-queries")
+            temperature = models.Temperature.objects.create(
+                child=self.child, temperature=37.0
+            )
+            temperature.tags.add("list-queries")
+
+    def count_queries(self, url):
+        with CaptureQueriesContext(connection) as queries:
+            page = self.client.get(url)
+        self.assertEqual(page.status_code, 200)
+        return len(queries)
+
+    def test_query_count_does_not_grow_with_the_entries(self):
+        self.add_entries(2)
+        # The first request also sets up the session and the user's settings.
+        for url in self.urls:
+            self.client.get(url)
+        few = {url: self.count_queries(url) for url in self.urls}
+        self.add_entries(4)
+        many = {url: self.count_queries(url) for url in self.urls}
+        self.assertEqual(few, many)

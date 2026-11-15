@@ -1,10 +1,10 @@
 # Verification only (not part of the fix): prints the query count of each
 # list page with 17 and with 21 diaper changes / 3 and 7 notes / 3 and 7
 # temperatures on one page.
-from core.tests.tests_views import ListQueriesTestCase
+from core.tests import tests_views
 
 
-class PrintCounts(ListQueriesTestCase):
+class PrintCounts(tests_views.ListQueriesTestCase):
     def test_query_count_does_not_grow_with_the_entries(self):
         self.add_entries(2)
         for url in self.urls:

@@ -1,0 +1,31 @@
+name: Verify fix
+on: push
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+        with:
+          python-version: "3.12"
+      - run: npm install --location=global gulp-cli
+      - run: npm install
+      - name: Lint (gulp lint, as in ci.yml)
+        run: gulp lint
+      - name: Full test suite with the fix (gulp coverage, as in ci.yml)
+        run: gulp coverage
+      - name: Query counts with the fix
+        run: pipenv run python manage.py test --settings=babybuddy.settings.test core.tests.verify_query_counts -v 2
+      - name: Query counts and the new test before the fix (upstream babybuddy/views.py)
+        run: |
+          git checkout 1638cfb02e2681c5a0c2f24fdf8d20048fda995a -- babybuddy/views.py
+          git diff --stat HEAD
+          pipenv run python manage.py test --settings=babybuddy.settings.test core.tests.verify_query_counts -v 2
+          if pipenv run python manage.py test --settings=babybuddy.settings.test core.tests.tests_views.ListQueriesTestCase -v 2; then
+            echo "::error::the new test passes without the fix"; exit 1
+          fi
+          echo "the new test fails without the fix, as expected"
